@@ -1,0 +1,77 @@
+--[[ okay buddy steal ma script but remember no one loves you ]]--
+
+
+local TweenService = game:GetService("TweenService")
+local antiLockEnabled = true -- Whether anti-lock is active
+local skyPosition = Vector3.new(0, 10000, 0) -- Position to force the camera to look straight up
+
+-- Function to detect if someone is locking onto the local player
+local function antiLock()
+    local localPlayer = game.Players.LocalPlayer
+    local character = localPlayer.Character
+    if not character then return end
+
+    local upperTorso = character:FindFirstChild("UpperTorso")
+    if not upperTorso then return end -- No torso, no locking
+
+    -- Check if any player is locking onto the local player
+    for _, player in pairs(game.Players:GetPlayers()) do
+        -- Exclude the local player from anti-lock checks
+        if player ~= localPlayer and player.Character then
+            local targetPart = player.Character:FindFirstChild("UpperTorso")
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+
+            if targetPart and humanoid and rootPart then
+                -- Detect if the locking player is focusing on the local player
+                local distance = (upperTorso.Position - targetPart.Position).Magnitude
+                local velocity = rootPart.Velocity.Magnitude
+
+                -- Check for lock-on or high-speed players
+                if distance < 200 or velocity > 50 then -- Adjust speed threshold as needed
+                    -- Force the locking player's camera to look straight up
+                    local playerCamera = player:FindFirstChild("Camera") or player.Character:FindFirstChild("Camera")
+                    if playerCamera then
+                        local currentCFrame = playerCamera.CFrame
+                        local targetCFrame = CFrame.new(currentCFrame.Position, currentCFrame.Position + Vector3.new(0, 1, 0))
+                        local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+                        local tween = TweenService:Create(playerCamera, tweenInfo, {CFrame = targetCFrame})
+                        tween:Play()
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Toggle button for enabling/disabling the anti-lock
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Parent = ScreenGui
+toggleButton.Size = UDim2.new(0, 30, 0, 30) -- Mobile-friendly size
+toggleButton.Position = UDim2.new(0, 10, 0, 10) -- Top-left corner position
+toggleButton.Text = "Anti-Lock\nOn" -- Default text
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- White text color
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Black background
+toggleButton.TextScaled = true -- Automatically scales text for better readability
+toggleButton.Font = Enum.Font.Gotham -- Clean and modern font for mobile
+toggleButton.TextWrapped = true -- Allow text to wrap within the button
+
+toggleButton.MouseButton1Click:Connect(function()
+    antiLockEnabled = not antiLockEnabled
+    toggleButton.Text = antiLockEnabled and "Anti-Lock\nOn" or "Anti-Lock\nOff"
+end)
+
+-- Keep the toggle button visible when the player respawns
+game.Players.LocalPlayer.CharacterAdded:Connect(function()
+    toggleButton.Parent = ScreenGui
+end)
+
+-- Run anti-lock logic every frame
+game:GetService("RunService").Heartbeat:Connect(function()
+    if antiLockEnabled then
+        antiLock()
+    end
+end)
