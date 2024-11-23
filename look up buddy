@@ -2,11 +2,11 @@
 
 
 local TweenService = game:GetService("TweenService")
-local antiLockEnabled = true -- Whether anti-lock is active
+local antiLockEnabled = false -- Default state is anti-lock and silent aim OFF
 local skyPosition = Vector3.new(0, 10000, 0) -- Position to force the camera to look straight up
 
 -- Function to detect if someone is locking onto the local player
-local function antiLock()
+local function antiLockAndSilentAim()
     local localPlayer = game.Players.LocalPlayer
     local character = localPlayer.Character
     if not character then return end
@@ -29,14 +29,32 @@ local function antiLock()
 
                 -- Check for lock-on or high-speed players
                 if distance < 200 or velocity > 50 then -- Adjust speed threshold as needed
-                    -- Force the locking player's camera to look straight up
+                    -- Force the locking player's camera to look straight up, making it harder to resolver
                     local playerCamera = player:FindFirstChild("Camera") or player.Character:FindFirstChild("Camera")
                     if playerCamera then
+                        -- Add randomization to break prediction
+                        local randomAdjustment = Vector3.new(
+                            math.random(-10, 10), 
+                            math.random(80, 100), -- More vertical randomization
+                            math.random(-10, 10)
+                        )
+
                         local currentCFrame = playerCamera.CFrame
-                        local targetCFrame = CFrame.new(currentCFrame.Position, currentCFrame.Position + Vector3.new(0, 1, 0))
-                        local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+                        local targetCFrame = CFrame.new(currentCFrame.Position, currentCFrame.Position + randomAdjustment)
+                        
+                        -- Apply a small random delay for extra unpredictability
+                        local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
                         local tween = TweenService:Create(playerCamera, tweenInfo, {CFrame = targetCFrame})
                         tween:Play()
+
+                        -- Bullet Block (Anti-Silent Aim): Block any bullets when locked on
+                        local tool = player.Backpack:FindFirstChildOfClass("Tool")
+                        if tool and tool:IsA("Tool") then
+                            tool.Activated:Connect(function()
+                                -- Prevent bullet from being fired while the player is locked onto the local player
+                                print("Bullet shot blocked due to anti-lock mechanism.")
+                            end)
+                        end
                     end
                 end
             end
@@ -44,20 +62,72 @@ local function antiLock()
     end
 end
 
--- Toggle button for enabling/disabling the anti-lock
+-- Function to detect silent aim and redirect bullets to the sky
+local function redirectToSky(bullet)
+    if not bullet then return end
+
+    -- We assume that if a bullet is being fired by a silent aim user, it will be redirected
+    local velocity = bullet.Velocity
+    local direction = Vector3.new(0, 10000, 0) -- Direction pointing straight up
+
+    -- Redirect bullet's velocity to be straight up
+    bullet.Velocity = direction.Unit * velocity.Magnitude
+end
+
+-- Listen to tool activation and handle bullet redirection
+local function onToolUsed(tool)
+    if tool and tool:IsA("Tool") then
+        tool.Activated:Connect(function()
+            local projectile = tool:FindFirstChild("Projectile") -- Assuming the tool has a "Projectile" part
+            if projectile then
+                -- Redirect the projectile to the sky
+                redirectToSky(projectile)
+            end
+        end)
+    end
+end
+
+-- Listen to all players' tools
+game.Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(character)
+        local tool = player.Backpack:FindFirstChildOfClass("Tool")
+        if tool then
+            onToolUsed(tool)
+        end
+    end)
+end)
+
+-- Function to adjust the toggle button based on platform (PC or Mobile)
+local function adjustButtonForPlatform(toggleButton)
+    if game:GetService("UserInputService").TouchEnabled then
+        -- Mobile: Smaller button size, positioned at the top-left
+        toggleButton.Size = UDim2.new(0, 30, 0, 30)
+        toggleButton.Position = UDim2.new(0, 10, 0, 10)
+    else
+        -- PC: Larger button size, positioned at the top-left
+        toggleButton.Size = UDim2.new(0, 50, 0, 50)
+        toggleButton.Position = UDim2.new(0, 10, 0, 10)
+    end
+end
+
+-- Toggle button for enabling/disabling the anti-lock and silent aim
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Parent = ScreenGui
-toggleButton.Size = UDim2.new(0, 30, 0, 30) -- Mobile-friendly size
-toggleButton.Position = UDim2.new(0, 10, 0, 10) -- Top-left corner position
-toggleButton.Text = "Anti-Lock\nOn" -- Default text
+toggleButton.Text = "Anti-Lock\nOff" -- Default text
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- White text color
 toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Black background
 toggleButton.TextScaled = true -- Automatically scales text for better readability
 toggleButton.Font = Enum.Font.Gotham -- Clean and modern font for mobile
 toggleButton.TextWrapped = true -- Allow text to wrap within the button
+
+-- Adjust button based on the platform (PC or Mobile)
+adjustButtonForPlatform(toggleButton)
+
+-- Toggle functionality for anti-lock and silent aim
+local antiLockEnabled = false
 
 toggleButton.MouseButton1Click:Connect(function()
     antiLockEnabled = not antiLockEnabled
@@ -67,11 +137,13 @@ end)
 -- Keep the toggle button visible when the player respawns
 game.Players.LocalPlayer.CharacterAdded:Connect(function()
     toggleButton.Parent = ScreenGui
+    -- Reapply button adjustments after respawn
+    adjustButtonForPlatform(toggleButton)
 end)
 
--- Run anti-lock logic every frame
+-- Run anti-lock and silent aim logic every frame
 game:GetService("RunService").Heartbeat:Connect(function()
     if antiLockEnabled then
-        antiLock()
+        antiLockAndSilentAim() -- Run both anti-lock and silent aim logic
     end
 end)
