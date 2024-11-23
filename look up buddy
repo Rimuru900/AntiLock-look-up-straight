@@ -7,12 +7,12 @@ local localPlayer = Players.LocalPlayer
 local antiLockEnabled = false -- Default state for anti-lock is OFF
 local toggleButton
 
--- Function to force the attacker's camera upwards
+-- Function to force an attacker's camera upwards
 local function forceCameraUp(attacker)
-    if attacker and attacker.Character then
+    if attacker and attacker ~= localPlayer and attacker.Character then
         local attackerCamera = workspace:FindFirstChild(attacker.Name .. "'s Camera") or workspace.CurrentCamera
         if attackerCamera then
-            -- Force camera to look straight up
+            -- Force attacker's camera to look straight up
             local randomAdjustment = Vector3.new(
                 math.random(-5, 5),
                 100,
@@ -44,7 +44,7 @@ local function antiLockAndSilentAim()
                 local distance = (upperTorso.Position - targetTorso.Position).Magnitude
 
                 if distance < 200 then
-                    forceCameraUp(player) -- Disrupt lock-on
+                    forceCameraUp(player) -- Disrupt the attacker's lock-on
                 end
             end
         end
