@@ -7,27 +7,27 @@ local localPlayer = Players.LocalPlayer
 local antiLockEnabled = false -- Default state for anti-lock is OFF
 local toggleButton
 
--- Function to force an attacker's camera upwards
-local function forceCameraUp(attacker)
+-- Function to redirect an attacker's camera upwards
+local function redirectAttackerCamera(attacker)
     if attacker and attacker ~= localPlayer and attacker.Character then
-        local attackerCamera = workspace:FindFirstChild(attacker.Name .. "'s Camera") or workspace.CurrentCamera
-        if attackerCamera then
-            -- Force attacker's camera to look straight up
-            local randomAdjustment = Vector3.new(
-                math.random(-5, 5),
-                100,
-                math.random(-5, 5)
-            )
-            local currentCFrame = attackerCamera.CFrame
-            local targetCFrame = CFrame.new(currentCFrame.Position, currentCFrame.Position + randomAdjustment)
+        local character = attacker.Character
+        local camera = workspace.CurrentCamera -- Camera for all players
 
-            attackerCamera.CFrame = targetCFrame -- Force immediate camera change
+        if camera and camera.CameraSubject == character then
+            -- Redirect the attacker's camera
+            local randomAdjustment = Vector3.new(
+                math.random(-10, 10),
+                100, -- Force the camera to look up
+                math.random(-10, 10)
+            )
+            local currentCFrame = camera.CFrame
+            camera.CFrame = CFrame.new(currentCFrame.Position, currentCFrame.Position + randomAdjustment)
         end
     end
 end
 
--- Function to detect locks and apply anti-lock measures
-local function antiLockAndSilentAim()
+-- Function to check for locks and apply anti-lock logic
+local function antiLockLogic()
     local character = localPlayer.Character
     if not character then return end
 
@@ -37,21 +37,17 @@ local function antiLockAndSilentAim()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= localPlayer and player.Character then
             local targetTorso = player.Character:FindFirstChild("UpperTorso")
-            local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-
-            if targetTorso and humanoid and humanoid.Health > 0 then
+            if targetTorso then
                 local distance = (upperTorso.Position - targetTorso.Position).Magnitude
-
                 if distance < 200 then
-                    forceCameraUp(player) -- Disrupt the attacker's lock-on
+                    redirectAttackerCamera(player) -- Apply anti-lock
                 end
             end
         end
     end
 end
 
--- Create a toggle button for anti-lock functionality
+-- Create a toggle button for enabling/disabling anti-lock
 local function createToggleButton()
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
@@ -65,7 +61,7 @@ local function createToggleButton()
     toggleButton.Font = Enum.Font.Gotham
     toggleButton.TextWrapped = true
 
-    -- Adjust button size and position for platform
+    -- Adjust button size and position based on platform
     if UserInputService.TouchEnabled then
         toggleButton.Size = UDim2.new(0, 30, 0, 30)
         toggleButton.Position = UDim2.new(0, 10, 0, 10)
@@ -81,17 +77,21 @@ local function createToggleButton()
     end)
 end
 
--- Keep the toggle button visible after respawn
-localPlayer.CharacterAdded:Connect(function()
-    toggleButton.Parent = localPlayer:WaitForChild("PlayerGui")
-end)
+-- Ensure toggle button persists across respawns
+local function ensureButtonOnRespawn()
+    localPlayer.CharacterAdded:Connect(function()
+        -- Recreate the toggle button after respawn
+        createToggleButton()
+    end)
+end
 
--- Run anti-lock logic when enabled
+-- Run anti-lock logic every frame
 RunService.Heartbeat:Connect(function()
     if antiLockEnabled then
-        antiLockAndSilentAim()
+        antiLockLogic()
     end
 end)
 
 -- Initialize the script
 createToggleButton()
+ensureButtonOnRespawn()
