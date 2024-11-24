@@ -1,4 +1,4 @@
--- Anti-Lock System Script with Executor Protection
+-- Anti-Lock System Script with Toggle Button and Text Update
 
 local player = game.Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
@@ -25,13 +25,13 @@ local lockOnDetectionCooldown = 0.5  -- Time between lock-on checks
 -- Add toggle button UI for mobile
 local screenGui = Instance.new("ScreenGui", player.PlayerGui)
 local toggleButton = Instance.new("TextButton", screenGui)
-toggleButton.Text = "Anti-Lock"
+toggleButton.Text = "AntiLock: OFF"  -- Initially set to OFF
 toggleButton.Size = toggleButtonSize
 toggleButton.Position = UDim2.new(0, 20, 0, 20)  -- Spawn at top-left corner
 toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.TextScaled = true
-toggleButton.Visible = toggleButtonVisible
+toggleButton.Visible = true  -- The toggle button will always be visible
 
 -- Log Function
 local function log(message)
@@ -45,32 +45,19 @@ local function playSound()
     sound:Play()
 end
 
--- Tweening function for camera manipulation
-local function tweenCamera(targetCFrame)
-    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
-    local goal = {CFrame = targetCFrame}
-    local tween = tweenService:Create(camera, tweenInfo, goal)
-    tween:Play()
-end
-
--- Adjust Camera FOV based on distance
-local function adjustCameraFOV()
-    local distance = (player.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
-    local targetFOV = math.clamp(100 + (distance / 10), 90, 120)
-    camera.FieldOfView = targetFOV
-end
-
--- Dynamic manipulation of camera for players locking on
+-- Function to manipulate the camera of players locking on
 local function manipulateCamera(player)
     -- Ensure that the executor's camera is not manipulated
     if player == game.Players.LocalPlayer then
         return
     end
     
+    -- Make the camera look straight up by manipulating its CFrame
     if tick() - lastManipulationTime >= manipulationCooldown then
         lastManipulationTime = tick()
-        local targetCFrame = camera.CFrame * CFrame.Angles(math.rad(manipulationFactor), 0, 0)
-        tweenCamera(targetCFrame)
+        -- Force the camera's CFrame to look straight up (high Y-value, 10000)
+        local targetCFrame = CFrame.new(camera.CFrame.Position, Vector3.new(camera.CFrame.Position.X, 10000, camera.CFrame.Position.Z))
+        camera.CFrame = targetCFrame
         log("Manipulating camera for " .. player.Name)
     end
 end
@@ -125,14 +112,24 @@ end
 
 -- Update and show toggle button UI on mobile
 toggleButton.MouseButton1Click:Connect(function()
-    toggleButton.Visible = not toggleButton.Visible
+    -- Toggle the state of anti-lock system
+    if toggleButton.Text == "AntiLock: OFF" then
+        toggleButton.Text = "AntiLock: ON"
+        -- Here, you can enable the anti-lock functionality (e.g., start manipulating cameras)
+        log("AntiLock system activated")
+        -- Add the functionality for activating anti-lock here, if needed
+    else
+        toggleButton.Text = "AntiLock: OFF"
+        -- Here, you can disable the anti-lock functionality (e.g., stop manipulating cameras)
+        log("AntiLock system deactivated")
+        -- Add the functionality for deactivating anti-lock here, if needed
+    end
 end)
 
 -- Continuously monitor for lock-on detection
 while true do
     handleLockOn()
     checkLockOnCooldown()
-    adjustCameraFOV()
     wait(0.1)  -- Check every 0.1 seconds for lock-on detection
 end
 
@@ -159,6 +156,6 @@ local function applySmoothCameraEffect()
         local distance = (player.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
         local newAngle = math.rad(30) + distance / 100
         local newCFrame = camera.CFrame * CFrame.Angles(newAngle, 0, 0)
-        tweenCamera(newCFrame)
-    end
+        camera.CFrame = newCFrame
+    end)
 end
