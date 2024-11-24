@@ -1,63 +1,164 @@
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
-local RunService = game:GetService("RunService")
+-- Anti-Lock System Script with Executor Protection
 
--- Create the ScreenGui and Toggle Button
-local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = LocalPlayer.PlayerGui
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local camera = workspace.CurrentCamera
+local tweenService = game:GetService("TweenService")
+local userInputService = game:GetService("UserInputService")
+local affectedPlayers = {}
+local lockOnQueue = {}
+local maxAffectedPlayers = 4
+local antiLockRadius = 50  -- Customizable radius for anti-lock detection
+local manipulationCooldown = 2  -- Cooldown time for camera manipulation
+local lockOnTimeout = 1  -- Timeout for detecting lock-on
+local lastLockOnTime = 0
+local lastManipulationTime = 0
+local intensityLevel = 2  -- 1 = low, 2 = medium, 3 = high
+local lockOnThreshold = 0.7  -- Threshold for detecting lock-on
+local affectedPlayersLimit = 4
+local manipulationFactor = intensityLevel * 10  -- Adjustment based on intensity
+local toggleButtonVisible = true
+local toggleButtonSize = UDim2.new(0, 20, 0, 20)  -- Size set to 20
+local lockOnDistance = 100  -- Detection range for lock-on
+local lockOnDetectionCooldown = 0.5  -- Time between lock-on checks
 
--- Function to create the Toggle Button
-local function createToggleButton()
-    -- Creating the Toggle Button UI
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Size = UDim2.new(0, 100, 0, 40)  -- Button size
-    toggleButton.Position = UDim2.new(0, 20, 0, 20)  -- Top-left corner (mobile)
-    toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)  -- Black background
-    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)  -- White text
-    toggleButton.Text = "AntiLock Off"
-    toggleButton.Parent = screenGui
+-- Add toggle button UI for mobile
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+local toggleButton = Instance.new("TextButton", screenGui)
+toggleButton.Text = "Anti-Lock"
+toggleButton.Size = toggleButtonSize
+toggleButton.Position = UDim2.new(0, 20, 0, 20)  -- Spawn at top-left corner
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextScaled = true
+toggleButton.Visible = toggleButtonVisible
 
-    -- Toggle the AntiLock state
-    toggleButton.MouseButton1Click:Connect(function()
-        isAntiLockEnabled = not isAntiLockEnabled
-        if isAntiLockEnabled then
-            toggleButton.Text = "AntiLock On"
-        else
-            toggleButton.Text = "AntiLock Off"
-        end
-    end)
-
-    return toggleButton
+-- Log Function
+local function log(message)
+    print("[AntiLock]: " .. message)
 end
 
--- Initialize the button
-local toggleButton = createToggleButton()
+-- Add sound notification for anti-lock activation
+local function playSound()
+    local sound = Instance.new("Sound", player.Character)
+    sound.SoundId = "rbxassetid://sound_id_here"
+    sound:Play()
+end
 
-local isAntiLockEnabled = false
+-- Tweening function for camera manipulation
+local function tweenCamera(targetCFrame)
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
+    local goal = {CFrame = targetCFrame}
+    local tween = tweenService:Create(camera, tweenInfo, goal)
+    tween:Play()
+end
 
--- Function to handle camera manipulation when AntiLock is on
-local function manipulateCamera()
-    if isAntiLockEnabled then
-        -- Only affect the LocalPlayer's camera
-        if Camera and Camera.CFrame then
-            -- Make the camera look at the sky (adjust the CFrame to look upwards)
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + Vector3.new(0, 10000, 0))
+-- Adjust Camera FOV based on distance
+local function adjustCameraFOV()
+    local distance = (player.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
+    local targetFOV = math.clamp(100 + (distance / 10), 90, 120)
+    camera.FieldOfView = targetFOV
+end
+
+-- Dynamic manipulation of camera for players locking on
+local function manipulateCamera(player)
+    -- Ensure that the executor's camera is not manipulated
+    if player == game.Players.LocalPlayer then
+        return
+    end
+    
+    if tick() - lastManipulationTime >= manipulationCooldown then
+        lastManipulationTime = tick()
+        local targetCFrame = camera.CFrame * CFrame.Angles(math.rad(manipulationFactor), 0, 0)
+        tweenCamera(targetCFrame)
+        log("Manipulating camera for " .. player.Name)
+    end
+end
+
+-- Check if players are locking on to you
+local function detectLockOn(player)
+    local ray = workspace:Raycast(player.Character.HumanoidRootPart.Position, character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position)
+    if ray and ray.Instance then
+        local dot = ray.Normal:Dot((camera.CFrame.Position - player.Character.HumanoidRootPart.Position).unit)
+        if dot >= lockOnThreshold then
+            -- Add to lock-on queue if not already affected
+            if not table.find(affectedPlayers, player) then
+                table.insert(affectedPlayers, player)
+                log(player.Name .. " locked on")
+            end
+            manipulateCamera(player)
         end
     end
 end
 
--- Run the manipulation every frame
-RunService.RenderStepped:Connect(function()
-    manipulateCamera()
+-- Add player to lock-on queue with a limit of affected players
+local function addToLockOnQueue(player)
+    if #affectedPlayers < affectedPlayersLimit then
+        table.insert(lockOnQueue, player)
+    end
+end
+
+-- Process the lock-on queue
+local function processLockOnQueue()
+    for _, player in pairs(lockOnQueue) do
+        detectLockOn(player)
+    end
+end
+
+-- Cooldown check for lock-on detection
+local function checkLockOnCooldown()
+    if tick() - lastLockOnTime >= lockOnTimeout then
+        -- Detect lock-on
+        lastLockOnTime = tick()
+        processLockOnQueue()
+    end
+end
+
+-- Detect and manipulate camera based on lock-on threshold
+local function handleLockOn()
+    for _, otherPlayer in pairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character then
+            addToLockOnQueue(otherPlayer)
+        end
+    end
+end
+
+-- Update and show toggle button UI on mobile
+toggleButton.MouseButton1Click:Connect(function()
+    toggleButton.Visible = not toggleButton.Visible
 end)
 
--- Ensure toggle button remains when respawning
-LocalPlayer.CharacterAdded:Connect(function()
-    -- Remove the old button, and recreate the new one
-    if screenGui:FindFirstChild("AntiLockButton") then
-        screenGui:FindFirstChild("AntiLockButton"):Destroy()
-    end
-    toggleButton = createToggleButton()  -- Recreate toggle button after respawn
-    toggleButton.Name = "AntiLockButton"  -- Set the button name for easy access
+-- Continuously monitor for lock-on detection
+while true do
+    handleLockOn()
+    checkLockOnCooldown()
+    adjustCameraFOV()
+    wait(0.1)  -- Check every 0.1 seconds for lock-on detection
+end
+
+-- Cross-platform handling for input
+if userInputService.TouchEnabled then
+    toggleButton.Size = UDim2.new(0, 120, 0, 60)  -- Resize for mobile
+else
+    toggleButton.Size = UDim2.new(0, 100, 0, 50)  -- Resize for desktop
+end
+
+-- Maintain toggle button visibility even after player death
+player.CharacterAdded:Connect(function()
+    toggleButton.Visible = true
 end)
+
+-- Handle player death (toggle button stays visible)
+player.Character:WaitForChild("Humanoid").Died:Connect(function()
+    toggleButton.Visible = true
+end)
+
+-- Smoothly apply the camera effect on lock-on detection
+local function applySmoothCameraEffect()
+    if tick() - lastManipulationTime >= manipulationCooldown then
+        local distance = (player.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
+        local newAngle = math.rad(30) + distance / 100
+        local newCFrame = camera.CFrame * CFrame.Angles(newAngle, 0, 0)
+        tweenCamera(newCFrame)
+    end
+end
