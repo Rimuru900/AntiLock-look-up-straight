@@ -1,73 +1,71 @@
--- AntiLock Toggle Button Creation (Mobile)
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Parent = game.Players.LocalPlayer.PlayerGui
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
 
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 200, 0, 50) -- Width: 200px, Height: 50px
-toggleButton.Position = UDim2.new(0, 10, 0, 10) -- Position at the top-left corner
-toggleButton.Text = "AntiLock Off"
-toggleButton.TextSize = 20
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- White text
-toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Black background (off state)
-toggleButton.Parent = ScreenGui
+-- Create the ScreenGui and Toggle Button
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = LocalPlayer.PlayerGui
 
-local antiLockEnabled = false
-local lockedPlayers = {} -- Store players who are locking on you
+local function createToggleButton()
+    -- Creating the Toggle Button UI
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Size = UDim2.new(0, 100, 0, 40)  -- Button size
+    toggleButton.Position = UDim2.new(0, 20, 0, 20)  -- Top-left corner
+    toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)  -- Black background
+    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)  -- White text
+    toggleButton.Text = "AntiLock Off"
+    toggleButton.Parent = screenGui
 
+    return toggleButton
+end
+
+-- Initialize the button
+local toggleButton = createToggleButton()
+
+local isAntiLockEnabled = false
+
+-- Toggle the AntiLock state
 toggleButton.MouseButton1Click:Connect(function()
-    antiLockEnabled = not antiLockEnabled
-    
-    if antiLockEnabled then
+    isAntiLockEnabled = not isAntiLockEnabled
+    if isAntiLockEnabled then
         toggleButton.Text = "AntiLock On"
-        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green background (on state)
     else
         toggleButton.Text = "AntiLock Off"
-        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Black background (off state)
     end
 end)
 
--- AntiLock Functionality
-local Camera = workspace.CurrentCamera
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+-- Function to check if someone is locking onto you
+local function handleCameraLock()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local target = player.Character:FindFirstChild("HumanoidRootPart")
 
-local function lockAntiLockCamera(targetPlayer)
-    -- Only manipulate the camera if AntiLock is enabled
-    if antiLockEnabled and targetPlayer == LocalPlayer then
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, Vector3.new(Camera.CFrame.Position.X, 10000, Camera.CFrame.Position.Z))
-    end
-end
-
--- Detect if any player is locking onto you
-local function isPlayerLockingOnYou(targetPlayer)
-    local targetChar = targetPlayer.Character
-    if not targetChar then return false end
-    
-    local targetHead = targetChar:FindFirstChild("Head")
-    if not targetHead then return false end
-
-    -- Check if the camera is aiming at your character
-    local direction = (targetHead.Position - Camera.CFrame.Position).unit
-    local dotProduct = Camera.CFrame.LookVector:Dot(direction)
-    
-    -- If the dot product is close to 1, the player is looking at you
-    return dotProduct > 0.9
-end
-
--- Monitor all players to detect locking and unlocking
-game:GetService("RunService").RenderStepped:Connect(function()
-    for _, targetPlayer in pairs(Players:GetPlayers()) do
-        if targetPlayer ~= LocalPlayer then
-            if isPlayerLockingOnYou(targetPlayer) then
-                -- If the player starts locking on you, manipulate their camera
-                if not lockedPlayers[targetPlayer] then
-                    lockedPlayers[targetPlayer] = true
-                    lockAntiLockCamera(targetPlayer)
+            if target then
+                -- Detect if player is locking on you
+                local screenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
+                if onScreen and isAntiLockEnabled then
+                    -- If player locks on, adjust their camera
+                    local direction = Camera.CFrame:VectorToWorldSpace(Vector3.new(0, 10000, 0))
+                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + direction)
                 end
-            elseif lockedPlayers[targetPlayer] then
-                -- If the player stops locking, reset their camera
-                lockedPlayers[targetPlayer] = nil
             end
         end
     end
+end
+
+-- Check for camera lock every frame
+RunService.RenderStepped:Connect(function()
+    if isAntiLockEnabled then
+        handleCameraLock()
+    end
+end)
+
+-- Ensure toggle button is recreated if the player respawns
+LocalPlayer.CharacterAdded:Connect(function()
+    -- Destroy previous UI and create new one
+    screenGui:ClearAllChildren()
+    toggleButton = createToggleButton()
 end)
