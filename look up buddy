@@ -18,6 +18,16 @@ local function createToggleButton()
     toggleButton.Text = "AntiLock Off"
     toggleButton.Parent = screenGui
 
+    -- Toggle the AntiLock state
+    toggleButton.MouseButton1Click:Connect(function()
+        isAntiLockEnabled = not isAntiLockEnabled
+        if isAntiLockEnabled then
+            toggleButton.Text = "AntiLock On"
+        else
+            toggleButton.Text = "AntiLock Off"
+        end
+    end)
+
     return toggleButton
 end
 
@@ -26,56 +36,28 @@ local toggleButton = createToggleButton()
 
 local isAntiLockEnabled = false
 
--- Toggle the AntiLock state
-toggleButton.MouseButton1Click:Connect(function()
-    isAntiLockEnabled = not isAntiLockEnabled
+-- Function to handle camera manipulation when AntiLock is on
+local function manipulateCamera()
     if isAntiLockEnabled then
-        toggleButton.Text = "AntiLock On"
-    else
-        toggleButton.Text = "AntiLock Off"
-    end
-end)
-
--- Function to check if someone is locking onto you or the executor (LocalPlayer)
-local function handleCameraLock()
-    -- Check if the LocalPlayer is locking onto themselves
-    if isAntiLockEnabled then
-        -- Applying the camera manipulation for the executing player as well
-        local direction = Vector3.new(0, 10000, 0)  -- Looking upwards
-        local cameraPosition = Camera.CFrame.Position + direction
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, cameraPosition)
-    end
-
-    -- Now handle locking detection for other players
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
-            local humanoid = player.Character:FindFirstChild("Humanoid")
-            local target = player.Character:FindFirstChild("HumanoidRootPart")
-
-            if target then
-                -- Detect if player is locking on you
-                local screenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
-                if onScreen then
-                    -- If player locks on, adjust their camera to look up
-                    local direction = Vector3.new(0, 10000, 0)  -- Looking upwards
-                    local cameraPosition = Camera.CFrame.Position + direction
-                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, cameraPosition)
-                end
-            end
+        -- Only affect the LocalPlayer's camera
+        if Camera and Camera.CFrame then
+            -- Make the camera look at the sky (adjust the CFrame to look upwards)
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + Vector3.new(0, 10000, 0))
         end
     end
 end
 
--- Check for camera lock every frame
+-- Run the manipulation every frame
 RunService.RenderStepped:Connect(function()
-    if isAntiLockEnabled then
-        handleCameraLock()
-    end
+    manipulateCamera()
 end)
 
--- Ensure toggle button is recreated if the player respawns
+-- Ensure toggle button remains when respawning
 LocalPlayer.CharacterAdded:Connect(function()
-    -- Destroy previous UI and create new one
-    screenGui:ClearAllChildren()
-    toggleButton = createToggleButton()
+    -- Remove the old button, and recreate the new one
+    if screenGui:FindFirstChild("AntiLockButton") then
+        screenGui:FindFirstChild("AntiLockButton"):Destroy()
+    end
+    toggleButton = createToggleButton()  -- Recreate toggle button after respawn
+    toggleButton.Name = "AntiLockButton"  -- Set the button name for easy access
 end)
