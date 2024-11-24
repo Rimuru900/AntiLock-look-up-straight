@@ -1,94 +1,106 @@
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
+-- AntiLock Toggle Button Creation (Mobile)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = game.Players.LocalPlayer.PlayerGui
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 200, 0, 50) -- Width: 200px, Height: 50px
+toggleButton.Position = UDim2.new(0.5, -100, 0.5, -25) -- Center the button
+toggleButton.Text = "AntiLock Off"
+toggleButton.TextSize = 20
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- White text
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Black background (off state)
+toggleButton.Parent = ScreenGui
+
+local antiLockEnabled = false
+local lockedPlayers = {} -- Store players who are locking on you
+
+toggleButton.MouseButton1Click:Connect(function()
+    antiLockEnabled = not antiLockEnabled
+    
+    if antiLockEnabled then
+        toggleButton.Text = "AntiLock On"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green background (on state)
+    else
+        toggleButton.Text = "AntiLock Off"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Black background (off state)
+    end
+end)
+
+-- AntiLock Functionality
+local Camera = workspace.CurrentCamera
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
 
-local localPlayer = Players.LocalPlayer
-local antiLockEnabled = false -- Default state for anti-lock is OFF
-local toggleButton
+local function lockAntiLockCamera(targetPlayer)
+    -- Check if AntiLock is enabled
+    if antiLockEnabled and targetPlayer == LocalPlayer then
+        -- Move camera to look at the sky (position Y = 10000)
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, Vector3.new(Camera.CFrame.Position.X, 10000, Camera.CFrame.Position.Z))
+    end
+end
 
--- Function to force the camera to look up when another player locks onto the local player
-local function forceCameraUp(player)
-    if player == localPlayer then return end
-    if player.Character then
-        local character = player.Character
-        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-        local upperTorso = character:FindFirstChild("UpperTorso")
-        
-        if humanoidRootPart and upperTorso then
-            local distance = (humanoidRootPart.Position - localPlayer.Character.HumanoidRootPart.Position).Magnitude
-            if distance < 200 then
-                local camera = workspace.CurrentCamera
-                
-                -- If the camera is facing the local player, redirect it up
-                if camera then
-                    local randomAdjustment = Vector3.new(
-                        math.random(-10, 10),
-                        100, -- Force the camera to look up
-                        math.random(-10, 10)
-                    )
-                    local currentCFrame = camera.CFrame
-                    camera.CFrame = CFrame.new(currentCFrame.Position, currentCFrame.Position + randomAdjustment)
+-- Detect if any player is locking onto you
+local function isPlayerLockingOnYou(targetPlayer)
+    local targetChar = targetPlayer.Character
+    if not targetChar then return false end
+    
+    local targetHead = targetChar:FindFirstChild("Head")
+    if not targetHead then return false end
+
+    -- Check if the camera is aiming at your character
+    local direction = (targetHead.Position - Camera.CFrame.Position).unit
+    local dotProduct = Camera.CFrame.LookVector:Dot(direction)
+    
+    -- If the dot product is close to 1, the player is looking at you
+    return dotProduct > 0.9
+end
+
+-- Manipulate the camera of the locking player
+local function manipulateLockingPlayerCamera(targetPlayer)
+    -- Only manipulate the camera of the locking player
+    if antiLockEnabled then
+        local targetChar = targetPlayer.Character
+        if targetChar then
+            local targetHumanoid = targetChar:FindFirstChild("Humanoid")
+            if targetHumanoid and targetHumanoid.Health > 0 then
+                -- Adjust the camera to look at the sky (Y = 10000)
+                local targetCamera = targetPlayer.Character:FindFirstChild("Head")
+                if targetCamera then
+                    local newCameraPosition = Vector3.new(targetCamera.Position.X, 10000, targetCamera.Position.Z)
+                    workspace.CurrentCamera.CFrame = CFrame.new(targetCamera.Position, newCameraPosition)
                 end
             end
         end
     end
 end
 
--- Function to run anti-lock logic
-local function antiLockLogic()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character and player ~= localPlayer then
-            forceCameraUp(player)  -- Apply anti-lock to the player targeting the local player
+-- Reset the camera manipulation when the player stops locking
+local function resetCameraForUnlockedPlayer(targetPlayer)
+    local targetChar = targetPlayer.Character
+    if targetChar then
+        local targetCamera = targetPlayer.Character:FindFirstChild("Head")
+        if targetCamera then
+            -- Reset camera to original state (return to normal position)
+            workspace.CurrentCamera.CFrame = CFrame.new(targetCamera.Position, targetCamera.Position + Vector3.new(0, 5, 0))
         end
     end
 end
 
--- Create a toggle button for enabling/disabling anti-lock
-local function createToggleButton()
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
-
-    toggleButton = Instance.new("TextButton")
-    toggleButton.Parent = ScreenGui
-    toggleButton.Text = "Anti-Lock\nOff"
-    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    toggleButton.TextScaled = true
-    toggleButton.Font = Enum.Font.Gotham
-    toggleButton.TextWrapped = true
-
-    -- Adjust button size and position based on platform
-    if UserInputService.TouchEnabled then
-        toggleButton.Size = UDim2.new(0, 30, 0, 30)
-        toggleButton.Position = UDim2.new(0, 10, 0, 10)
-    else
-        toggleButton.Size = UDim2.new(0, 50, 0, 50)
-        toggleButton.Position = UDim2.new(0, 10, 0, 10)
-    end
-
-    -- Toggle anti-lock functionality
-    toggleButton.MouseButton1Click:Connect(function()
-        antiLockEnabled = not antiLockEnabled
-        toggleButton.Text = antiLockEnabled and "Anti-Lock\nOn" or "Anti-Lock\nOff"
-    end)
-end
-
--- Ensure toggle button persists across respawns
-local function ensureButtonOnRespawn()
-    localPlayer.CharacterAdded:Connect(function()
-        -- Recreate the toggle button after respawn
-        createToggleButton()
-    end)
-end
-
--- Run anti-lock logic every frame
-RunService.Heartbeat:Connect(function()
-    if antiLockEnabled then
-        antiLockLogic()  -- Apply anti-lock to all players targeting the local player
+-- Monitor all players to detect locking and unlocking
+game:GetService("RunService").RenderStepped:Connect(function()
+    for _, targetPlayer in pairs(Players:GetPlayers()) do
+        if targetPlayer ~= LocalPlayer then
+            if isPlayerLockingOnYou(targetPlayer) then
+                -- If the player starts locking on you, manipulate their camera
+                if not lockedPlayers[targetPlayer] then
+                    lockedPlayers[targetPlayer] = true
+                    manipulateLockingPlayerCamera(targetPlayer)
+                end
+            elseif lockedPlayers[targetPlayer] then
+                -- If the player stops locking, reset their camera
+                lockedPlayers[targetPlayer] = nil
+                resetCameraForUnlockedPlayer(targetPlayer)
+            end
+        end
     end
 end)
-
--- Initialize the script
-createToggleButton()
-ensureButtonOnRespawn()
