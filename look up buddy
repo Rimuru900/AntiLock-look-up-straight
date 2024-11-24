@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = LocalPlayer.PlayerGui
 
+-- Function to create the Toggle Button
 local function createToggleButton()
     -- Creating the Toggle Button UI
     local toggleButton = Instance.new("TextButton")
@@ -47,7 +48,7 @@ local function handleCameraLock()
                 -- Detect if player is locking on you
                 local screenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
                 if onScreen and isAntiLockEnabled then
-                    -- If player locks on, adjust their camera
+                    -- If player locks on, adjust their camera to look up
                     local direction = Camera.CFrame:VectorToWorldSpace(Vector3.new(0, 10000, 0))
                     Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + direction)
                 end
