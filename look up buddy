@@ -1,4 +1,3 @@
-local UIS = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -13,7 +12,7 @@ local function createToggleButton()
     -- Creating the Toggle Button UI
     local toggleButton = Instance.new("TextButton")
     toggleButton.Size = UDim2.new(0, 100, 0, 40)  -- Button size
-    toggleButton.Position = UDim2.new(0, 20, 0, 20)  -- Top-left corner
+    toggleButton.Position = UDim2.new(0, 20, 0, 20)  -- Top-left corner (mobile)
     toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)  -- Black background
     toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)  -- White text
     toggleButton.Text = "AntiLock Off"
@@ -37,8 +36,17 @@ toggleButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Function to check if someone is locking onto you
+-- Function to check if someone is locking onto you or the executor (LocalPlayer)
 local function handleCameraLock()
+    -- Check if the LocalPlayer is locking onto themselves
+    if isAntiLockEnabled then
+        -- Applying the camera manipulation for the executing player as well
+        local direction = Vector3.new(0, 10000, 0)  -- Looking upwards
+        local cameraPosition = Camera.CFrame.Position + direction
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, cameraPosition)
+    end
+
+    -- Now handle locking detection for other players
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
             local humanoid = player.Character:FindFirstChild("Humanoid")
@@ -47,7 +55,7 @@ local function handleCameraLock()
             if target then
                 -- Detect if player is locking on you
                 local screenPos, onScreen = Camera:WorldToViewportPoint(target.Position)
-                if onScreen and isAntiLockEnabled then
+                if onScreen then
                     -- If player locks on, adjust their camera to look up
                     local direction = Vector3.new(0, 10000, 0)  -- Looking upwards
                     local cameraPosition = Camera.CFrame.Position + direction
