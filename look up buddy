@@ -4,7 +4,7 @@ ScreenGui.Parent = game.Players.LocalPlayer.PlayerGui
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = UDim2.new(0, 200, 0, 50) -- Width: 200px, Height: 50px
-toggleButton.Position = UDim2.new(0.5, -100, 0.5, -25) -- Center the button
+toggleButton.Position = UDim2.new(0, 10, 0, 10) -- Position at the top-left corner
 toggleButton.Text = "AntiLock Off"
 toggleButton.TextSize = 20
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- White text
@@ -32,9 +32,8 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local function lockAntiLockCamera(targetPlayer)
-    -- Check if AntiLock is enabled
+    -- Only manipulate the camera if AntiLock is enabled
     if antiLockEnabled and targetPlayer == LocalPlayer then
-        -- Move camera to look at the sky (position Y = 10000)
         Camera.CFrame = CFrame.new(Camera.CFrame.Position, Vector3.new(Camera.CFrame.Position.X, 10000, Camera.CFrame.Position.Z))
     end
 end
@@ -55,37 +54,6 @@ local function isPlayerLockingOnYou(targetPlayer)
     return dotProduct > 0.9
 end
 
--- Manipulate the camera of the locking player
-local function manipulateLockingPlayerCamera(targetPlayer)
-    -- Only manipulate the camera of the locking player
-    if antiLockEnabled then
-        local targetChar = targetPlayer.Character
-        if targetChar then
-            local targetHumanoid = targetChar:FindFirstChild("Humanoid")
-            if targetHumanoid and targetHumanoid.Health > 0 then
-                -- Adjust the camera to look at the sky (Y = 10000)
-                local targetCamera = targetPlayer.Character:FindFirstChild("Head")
-                if targetCamera then
-                    local newCameraPosition = Vector3.new(targetCamera.Position.X, 10000, targetCamera.Position.Z)
-                    workspace.CurrentCamera.CFrame = CFrame.new(targetCamera.Position, newCameraPosition)
-                end
-            end
-        end
-    end
-end
-
--- Reset the camera manipulation when the player stops locking
-local function resetCameraForUnlockedPlayer(targetPlayer)
-    local targetChar = targetPlayer.Character
-    if targetChar then
-        local targetCamera = targetPlayer.Character:FindFirstChild("Head")
-        if targetCamera then
-            -- Reset camera to original state (return to normal position)
-            workspace.CurrentCamera.CFrame = CFrame.new(targetCamera.Position, targetCamera.Position + Vector3.new(0, 5, 0))
-        end
-    end
-end
-
 -- Monitor all players to detect locking and unlocking
 game:GetService("RunService").RenderStepped:Connect(function()
     for _, targetPlayer in pairs(Players:GetPlayers()) do
@@ -94,12 +62,11 @@ game:GetService("RunService").RenderStepped:Connect(function()
                 -- If the player starts locking on you, manipulate their camera
                 if not lockedPlayers[targetPlayer] then
                     lockedPlayers[targetPlayer] = true
-                    manipulateLockingPlayerCamera(targetPlayer)
+                    lockAntiLockCamera(targetPlayer)
                 end
             elseif lockedPlayers[targetPlayer] then
                 -- If the player stops locking, reset their camera
                 lockedPlayers[targetPlayer] = nil
-                resetCameraForUnlockedPlayer(targetPlayer)
             end
         end
     end
